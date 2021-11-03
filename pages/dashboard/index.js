@@ -34,34 +34,41 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { useRouter } from "next/dist/client/router";
 import * as React from "react";
-import { listSubscriberInfo, checkStatus, changeStatus } from "../../data/api";
+import {
+  listSubscriberInfo,
+  checkStatus,
+  changeStatus,
+  identity,
+} from "../../data/api";
 
 const mdTheme = createTheme();
 
+function useIdentity() {
+  const [isAuthenticate, setIsAuthenticate] = React.useState(false);
+  const router = useRouter();
+  React.useEffect(() => {
+    identity().then((res) => {
+      if (res.msg != "ok") {
+        router.push("/signin");
+        return;
+      }
+      setIsAuthenticate(true);
+    });
+  }, []);
+  return isAuthenticate;
+}
+
 function DashboardContent() {
   const router = useRouter();
-  const [isAuthenticate, setIsAuthenticate] = React.useState(false);
-  const [open, setOpen] = React.useState(false);
-  const handleClose = (event, reason) => {
-    if (reason === "clickaway") {
-      return;
-    }
-    setOpen(false);
-  };
-
-  React.useEffect(() => {
-    const jwt = localStorage.getItem("JWT_TOKEN");
-    if (!jwt) {
-      router.push("/signin");
-      return;
-    }
-    setIsAuthenticate(true);
-  }, []);
-
+  const [isCheckModalOpen, setIsCheckModalOpen] = React.useState(false);
+  const [isSnackbarOpen, setIsSnackbarOpen] = React.useState(false);
+  const [isStatusLoading, setIsStatusLoading] = React.useState(false);
+  const [selectedUserId, setSelectedUserId] = React.useState();
   const [subsInfo, setSubsInfo] = React.useState([]);
+  const isAuthenticate = useIdentity();
+
   React.useEffect(() => {
     listSubscriberInfo().then((res) => {
-      console.log(res);
       if (!res.data) {
         return;
       }
@@ -69,7 +76,6 @@ function DashboardContent() {
     });
   }, []);
 
-  const [isSnackbarOpen, setIsSnackbarOpen] = React.useState(false);
   const handleSnackbarClose = (event, reason) => {
     if (reason === "clickaway") {
       return;
@@ -77,20 +83,21 @@ function DashboardContent() {
     setIsSnackbarOpen(false);
   };
 
-  const [selectedUserId, setSelectedUserId] = React.useState();
+  const handleClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setIsCheckModalOpen(false);
+  };
 
   const handleCheck = (userID) => {
-    console.log("handleCheck", userID);
-    setOpen(true);
+    setIsCheckModalOpen(true);
     setSelectedUserId(userID);
   };
 
-  const [isStatusLoading, setIsStatusLoading] = React.useState(false);
   const handleStatusChange = (newValue, id) => {
-    console.log("ok", newValue, id);
     setIsStatusLoading(true);
     changeStatus(id, newValue).then((res) => {
-      console.log(res);
       const newSub = subsInfo.map((val) => {
         if (val.ID !== id) {
           return val;
@@ -126,12 +133,7 @@ function DashboardContent() {
         <CssBaseline />
         <Layout />
 
-        <Modal
-          open={open}
-          onClose={handleClose}
-          aria-labelledby="modal-modal-title"
-          aria-describedby="modal-modal-description"
-        >
+        <Modal open={isCheckModalOpen} onClose={handleClose}>
           <CheckModal userId={selectedUserId} />
         </Modal>
 
@@ -232,7 +234,6 @@ function Layout() {
   };
 
   const handleLogout = () => {
-    console.log("ok");
     localStorage.removeItem("JWT_TOKEN");
     router.push("/signin");
   };
@@ -242,7 +243,7 @@ function Layout() {
       <AppBar position="absolute" open={open}>
         <Toolbar
           sx={{
-            pr: "24px", // keep right padding when drawer closed
+            pr: "24px",
           }}
         >
           <IconButton
@@ -384,33 +385,52 @@ const prizeLookUp = {
 };
 
 function CheckModal({ userId }) {
+  const [isLoading, setIsLoading] = React.useState(true);
   const [packages, setPackages] = React.useState();
+  const [errMsg, setErrMsg] = React.useState();
   React.useEffect(() => {
     checkStatus(userId).then((res) => {
-      console.log(res);
+      setIsLoading(false);
+      if (res.status === "error") {
+        setErrMsg(res.message);
+        return;
+      }
       setPackages(res.packages);
     });
   }, []);
+
   return (
     <Box sx={style}>
       <Typography id="modal-modal-title" variant="h6" component="h2">
-        show data form api by userid and set action status {userId}
+        {userId}'s packages
       </Typography>
 
-      <TableContainer component={Paper}>
-        <Table sx={{ minWidth: 650 }} aria-label="simple table">
-          <TableHead>
-            <TableRow>
-              <TableCell>Status</TableCell>
-              <TableCell>Name</TableCell>
-              <TableCell>Serial</TableCell>
-              <TableCell>Tag</TableCell>
-              <TableCell>Prize</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {packages ? (
-              packages.map((row, i) => (
+      {isLoading && !packages && (
+        <Typography id="modal-modal-title" variant="h6" component="h2">
+          Loading...
+        </Typography>
+      )}
+
+      {!isLoading && errMsg && (
+        <Typography id="modal-modal-title" variant="h6" component="h2">
+          {errMsg}
+        </Typography>
+      )}
+
+      {packages && (
+        <TableContainer component={Paper}>
+          <Table sx={{ minWidth: 650 }} aria-label="simple table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Status</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Serial</TableCell>
+                <TableCell>Tag</TableCell>
+                <TableCell>Prize</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {packages.map((row, i) => (
                 <TableRow key={i}>
                   <TableCell>{row.orderStatus}</TableCell>
                   <TableCell>{row.packageName}</TableCell>
@@ -418,15 +438,11 @@ function CheckModal({ userId }) {
                   <TableCell>{row.packageTag}</TableCell>
                   <TableCell>{prizeLookUp[row.packageTag]}</TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <Typography id="modal-modal-title" variant="h6" component="p">
-                Loading...
-              </Typography>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
     </Box>
   );
 }

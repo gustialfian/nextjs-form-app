@@ -14,7 +14,7 @@ export async function signIn(username, password) {
 
 export async function identity() {
   const jwt = localStorage.getItem("JWT_TOKEN");
-  await fetch(`${baseUrl}/api/v0/identity`, {
+  const res = await fetch(`${baseUrl}/api/v0/identity`, {
     headers: {
       Authorization: `Bearer ${jwt}`,
     },

@@ -63,21 +63,15 @@ export default function Checkout() {
   const handleSubmit = (event) => {
     event.preventDefault();
     const subsinfo = { ...data, userId: userId };
-    console.log("Submit", subsinfo);
     subscriberSubmit(subsinfo)
       .then((res) => {
-        console.log("done", res);
         setOpen(true);
         setData(defaultData);
       })
       .catch((err) => {
-        console.log("<Form /> handleSumbit");
         console.error(err);
       });
   };
-
-  console.log("router.query.userId: ", userId);
-  console.log("data", data);
 
   if (!userId) {
     return (
