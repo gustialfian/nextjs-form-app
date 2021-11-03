@@ -2,7 +2,14 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
-import { Button } from "@mui/material";
+import {
+  Button,
+  MenuItem,
+  Modal,
+  Select,
+  Snackbar,
+  TableContainer,
+} from "@mui/material";
 import MuiAppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
@@ -27,7 +34,273 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { useRouter } from "next/dist/client/router";
 import * as React from "react";
-import { listSubscriberInfo } from "../../data/api";
+import { listSubscriberInfo, checkStatus, changeStatus } from "../../data/api";
+
+const mdTheme = createTheme();
+
+function DashboardContent() {
+  const router = useRouter();
+  const [isAuthenticate, setIsAuthenticate] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
+  const handleClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setOpen(false);
+  };
+
+  React.useEffect(() => {
+    const jwt = localStorage.getItem("JWT_TOKEN");
+    if (!jwt) {
+      router.push("/signin");
+      return;
+    }
+    setIsAuthenticate(true);
+  }, []);
+
+  const [subsInfo, setSubsInfo] = React.useState([]);
+  React.useEffect(() => {
+    listSubscriberInfo().then((res) => {
+      console.log(res);
+      if (!res.data) {
+        return;
+      }
+      setSubsInfo(res.data);
+    });
+  }, []);
+
+  const [isSnackbarOpen, setIsSnackbarOpen] = React.useState(false);
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setIsSnackbarOpen(false);
+  };
+
+  const [selectedUserId, setSelectedUserId] = React.useState();
+
+  const handleCheck = (userID) => {
+    console.log("handleCheck", userID);
+    setOpen(true);
+    setSelectedUserId(userID);
+  };
+
+  const [isStatusLoading, setIsStatusLoading] = React.useState(false);
+  const handleStatusChange = (newValue, id) => {
+    console.log("ok", newValue, id);
+    setIsStatusLoading(true);
+    changeStatus(id, newValue).then((res) => {
+      console.log(res);
+      const newSub = subsInfo.map((val) => {
+        if (val.ID !== id) {
+          return val;
+        }
+        return {
+          ...val,
+          status: newValue,
+        };
+      });
+      setSubsInfo(newSub);
+      setIsSnackbarOpen(true);
+      setIsStatusLoading(false);
+    });
+  };
+
+  if (!isAuthenticate) {
+    return (
+      <Typography
+        component="h1"
+        variant="h6"
+        color="inherit"
+        noWrap
+        sx={{ flexGrow: 1 }}
+      >
+        Loading...
+      </Typography>
+    );
+  }
+
+  return (
+    <ThemeProvider theme={mdTheme}>
+      <Box sx={{ display: "flex" }}>
+        <CssBaseline />
+        <Layout />
+
+        <Modal
+          open={open}
+          onClose={handleClose}
+          aria-labelledby="modal-modal-title"
+          aria-describedby="modal-modal-description"
+        >
+          <CheckModal userId={selectedUserId} />
+        </Modal>
+
+        <Snackbar
+          open={isSnackbarOpen}
+          autoHideDuration={6000}
+          onClose={handleSnackbarClose}
+          message="Status Submission changed"
+        />
+
+        <Box
+          component="main"
+          sx={{
+            backgroundColor: (theme) =>
+              theme.palette.mode === "light"
+                ? theme.palette.grey[100]
+                : theme.palette.grey[900],
+            flexGrow: 1,
+            height: "100vh",
+            overflow: "auto",
+          }}
+        >
+          <Toolbar />
+          <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                  <Typography
+                    component="h2"
+                    variant="h6"
+                    color="primary"
+                    gutterBottom
+                  >
+                    Recent Orders
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>User ID</TableCell>
+                        <TableCell>Address</TableCell>
+                        <TableCell>Contact Number</TableCell>
+                        <TableCell>Contact Person</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {subsInfo.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell>{row.userID}</TableCell>
+                          <TableCell>{row.address}</TableCell>
+                          <TableCell>{row.contactNumber}</TableCell>
+                          <TableCell>{row.contactPerson}</TableCell>
+                          <TableCell>
+                            <Select
+                              labelId="demo-simple-select-label"
+                              id="demo-simple-select"
+                              label="Age"
+                              value={row.status}
+                              onChange={(e) =>
+                                handleStatusChange(e.target.value, row.ID)
+                              }
+                              disabled={isStatusLoading}
+                            >
+                              <MenuItem value={"created"}>Created</MenuItem>
+                              <MenuItem value={"delivery"}>Delivery</MenuItem>
+                              <MenuItem value={"rejected"}>Rejected</MenuItem>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="contained"
+                              onClick={() => handleCheck(row.userID)}
+                            >
+                              Check
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Paper>
+              </Grid>
+            </Grid>
+            <Copyright sx={{ pt: 4 }} />
+          </Container>
+        </Box>
+      </Box>
+    </ThemeProvider>
+  );
+}
+
+function Layout() {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(true);
+  const toggleDrawer = () => {
+    setOpen(!open);
+  };
+
+  const handleLogout = () => {
+    console.log("ok");
+    localStorage.removeItem("JWT_TOKEN");
+    router.push("/signin");
+  };
+
+  return (
+    <>
+      <AppBar position="absolute" open={open}>
+        <Toolbar
+          sx={{
+            pr: "24px", // keep right padding when drawer closed
+          }}
+        >
+          <IconButton
+            edge="start"
+            color="inherit"
+            aria-label="open drawer"
+            onClick={toggleDrawer}
+            sx={{
+              marginRight: "36px",
+              ...(open && { display: "none" }),
+            }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography
+            component="h1"
+            variant="h6"
+            color="inherit"
+            noWrap
+            sx={{ flexGrow: 1 }}
+          >
+            Dashboard
+          </Typography>
+        </Toolbar>
+      </AppBar>
+      <Drawer variant="permanent" open={open}>
+        <Toolbar
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            px: [1],
+          }}
+        >
+          <IconButton onClick={toggleDrawer}>
+            <ChevronLeftIcon />
+          </IconButton>
+        </Toolbar>
+        <Divider />
+        <List>
+          <ListItem button>
+            <ListItemIcon>
+              <DashboardIcon />
+            </ListItemIcon>
+            <ListItemText primary="Dashboard" />
+          </ListItem>
+          <ListItem button onClick={handleLogout}>
+            <ListItemIcon>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItem>
+        </List>
+        <Divider />
+      </Drawer>
+    </>
+  );
+}
 
 function Copyright(props) {
   return (
@@ -93,181 +366,68 @@ const Drawer = styled(MuiDrawer, {
   },
 }));
 
-const mdTheme = createTheme();
+const style = {
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: 800,
+  bgcolor: "background.paper",
+  boxShadow: 24,
+  p: 4,
+};
 
-function DashboardContent() {
-  const [open, setOpen] = React.useState(true);
-  const toggleDrawer = () => {
-    setOpen(!open);
-  };
-  const router = useRouter();
+const prizeLookUp = {
+  englishacademy: "Shoes",
+  skillacademy: "Bag",
+  ruangguru: "Pencils",
+};
 
-  const [isAuthenticate, setIsAuthenticate] = React.useState(false);
+function CheckModal({ userId }) {
+  const [packages, setPackages] = React.useState();
   React.useEffect(() => {
-    const jwt = localStorage.getItem("JWT_TOKEN");
-    if (!jwt) {
-      router.push("/signin");
-      return
-    }
-    setIsAuthenticate(true)
+    checkStatus(userId).then((res) => {
+      console.log(res);
+      setPackages(res.packages);
+    });
   }, []);
-
-  const [subsInfo, setSubsInfo] = React.useState([])
-  React.useEffect(() => {
-    listSubscriberInfo().then(res => {
-      console.log(res)
-      if (!res.data) {
-        return
-      }
-      setSubsInfo(res.data)
-    })
-  }, [])
-
-  const handleLogout = () => {
-    console.log("ok");
-    localStorage.removeItem("JWT_TOKEN");
-    router.push("/signin");
-  };
-
-  const handleCheck = (userID) => {
-    console.log("handleCheck", userID)
-  }
-
-  if (!isAuthenticate) {
-    return (
-      <Typography
-        component="h1"
-        variant="h6"
-        color="inherit"
-        noWrap
-        sx={{ flexGrow: 1 }}
-      >
-        Loading...
-      </Typography>
-    );
-  }
-
   return (
-    <ThemeProvider theme={mdTheme}>
-      <Box sx={{ display: "flex" }}>
-        <CssBaseline />
-        <AppBar position="absolute" open={open}>
-          <Toolbar
-            sx={{
-              pr: "24px", // keep right padding when drawer closed
-            }}
-          >
-            <IconButton
-              edge="start"
-              color="inherit"
-              aria-label="open drawer"
-              onClick={toggleDrawer}
-              sx={{
-                marginRight: "36px",
-                ...(open && { display: "none" }),
-              }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography
-              component="h1"
-              variant="h6"
-              color="inherit"
-              noWrap
-              sx={{ flexGrow: 1 }}
-            >
-              Dashboard
-            </Typography>
-          </Toolbar>
-        </AppBar>
-        <Drawer variant="permanent" open={open}>
-          <Toolbar
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              px: [1],
-            }}
-          >
-            <IconButton onClick={toggleDrawer}>
-              <ChevronLeftIcon />
-            </IconButton>
-          </Toolbar>
-          <Divider />
-          <List>
-            <ListItem button>
-              <ListItemIcon>
-                <DashboardIcon />
-              </ListItemIcon>
-              <ListItemText primary="Dashboard" />
-            </ListItem>
-            <ListItem button onClick={handleLogout}>
-              <ListItemIcon>
-                <LogoutIcon />
-              </ListItemIcon>
-              <ListItemText primary="Logout" />
-            </ListItem>
-          </List>
-          <Divider />
-        </Drawer>
-        <Box
-          component="main"
-          sx={{
-            backgroundColor: (theme) =>
-              theme.palette.mode === "light"
-                ? theme.palette.grey[100]
-                : theme.palette.grey[900],
-            flexGrow: 1,
-            height: "100vh",
-            overflow: "auto",
-          }}
-        >
-          <Toolbar />
-          <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-            <Grid container spacing={3}>
-              {/* Recent Orders */}
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
-                  <Typography
-                    component="h2"
-                    variant="h6"
-                    color="primary"
-                    gutterBottom
-                  >
-                    Recent Orders
-                  </Typography>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>User ID</TableCell>
-                        <TableCell>Address</TableCell>
-                        <TableCell>Contact Number</TableCell>
-                        <TableCell>Contact Person</TableCell>
-                        <TableCell>Action</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {subsInfo.map((row, i) => (
-                        <TableRow key={i}>
-                          <TableCell>{row.userID}</TableCell>
-                          <TableCell>{row.address}</TableCell>
-                          <TableCell>{row.contactNumber}</TableCell>
-                          <TableCell>{row.contactPerson}</TableCell>
-                          <TableCell>
-                            <Button variant="contained" onClick={() => handleCheck(row.userID)}>Check</Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Paper>
-              </Grid>
-            </Grid>
-            <Copyright sx={{ pt: 4 }} />
-          </Container>
-        </Box>
-      </Box>
-    </ThemeProvider>
+    <Box sx={style}>
+      <Typography id="modal-modal-title" variant="h6" component="h2">
+        show data form api by userid and set action status {userId}
+      </Typography>
+
+      <TableContainer component={Paper}>
+        <Table sx={{ minWidth: 650 }} aria-label="simple table">
+          <TableHead>
+            <TableRow>
+              <TableCell>Status</TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell>Serial</TableCell>
+              <TableCell>Tag</TableCell>
+              <TableCell>Prize</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {packages ? (
+              packages.map((row, i) => (
+                <TableRow key={i}>
+                  <TableCell>{row.orderStatus}</TableCell>
+                  <TableCell>{row.packageName}</TableCell>
+                  <TableCell>{row.packageSerial}</TableCell>
+                  <TableCell>{row.packageTag}</TableCell>
+                  <TableCell>{prizeLookUp[row.packageTag]}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <Typography id="modal-modal-title" variant="h6" component="p">
+                Loading...
+              </Typography>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 }
 
